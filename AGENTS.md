@@ -63,6 +63,20 @@ Keep upstream feature work separate from fork-specific packaging and NIC
 changes. The `packaging/qbittorrent-container` branch contains those fork
 changes; do not include them when preparing an upstream pull request.
 
+Generated build directories are reusable local caches and may take a long time
+to recreate. Do not remove them without explicit approval. Keep them out of
+commits by staging intended files explicitly; a worktree-local
+`.git/info/exclude` entry may be used for a cache such as `build-headless/`.
+
+## RSS Downloader Rules
+
+RSS rule import is a non-destructive, name-keyed upsert. Imported rules replace
+existing rules with the same name and add rules that are missing locally;
+existing rules absent from the import are not removed. The WebAPI supports the
+JSON and legacy RSS rule formats through `rss/exportRules` and
+`rss/importRules`, and the WebUI exposes those operations in the RSS
+Downloader view.
+
 ## Container Image Workflow
 
 Container work belongs on `packaging/qbittorrent-container`. The test image is
