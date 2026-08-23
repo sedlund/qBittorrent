@@ -363,9 +363,9 @@ Supports the formats: S01E01, 1x1, 2017.12.31 and 31.12.2017 (Date formats also 
                 rssDownloaderFeedSelectionTable: rssDownloaderFeedSelectionTable,
                 setElementTitles: setElementTitles,
                 addRule: addRule,
-                removeSelectedRule: removeSelectedRule
-                , exportRules: exportRules
-                , importRules: importRules
+                removeSelectedRule: removeSelectedRule,
+                exportRules: exportRules,
+                importRules: importRules
             };
         };
 
@@ -409,9 +409,9 @@ Supports the formats: S01E01, 1x1, 2017.12.31 and 31.12.2017 (Date formats also 
             const formData = new FormData();
             formData.append("rules", file, file.name);
             fetch(`api/v2/rss/importRules?format=${format}`, {
-                method: "POST",
-                body: formData
-            })
+                    method: "POST",
+                    body: formData
+                })
                 .then(async (response) => {
                     if (!response.ok)
                         throw new Error(await response.text());
