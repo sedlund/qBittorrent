@@ -37,8 +37,8 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
-          push: true
           tags: ${{ steps.metadata.outputs.tags }}
           labels: ${{ steps.metadata.outputs.labels }}
+          outputs: type=image,push=true,compression=zstd,oci-mediatypes=true,force-compression=true
           cache-from: type=gha
           cache-to: type=gha,mode=max

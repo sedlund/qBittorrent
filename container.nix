@@ -34,27 +34,36 @@ let
     pathsToLink = [ "/bin" "/lib" "/lib64" "/share" ];
     ignoreCollisions = true;
   };
-in
-pkgs.dockerTools.buildImage {
-  name = "ghcr.io/sedlund/qbittorrent";
-  tag = "fix-rss-downloader-rule-import-export";
-  copyToRoot = [ qbittorrent runtime pkgs.cacert ];
-  config = {
-    User = "1000:1000";
-    Cmd = [ "${qbittorrent}/bin/qbittorrent-nox" ];
-    Env = [
-      "HOME=/config"
-      "XDG_CONFIG_HOME=/config"
-      "PATH=/bin:/usr/bin:/sbin:/usr/sbin"
-    ];
-    ExposedPorts = {
-      "8080/tcp" = {};
-      "6881/tcp" = {};
-      "6881/udp" = {};
-    };
-    Volumes = {
-      "/config" = {};
-      "/downloads" = {};
+  dockerImage = pkgs.dockerTools.buildImage {
+    name = "ghcr.io/sedlund/qbittorrent";
+    tag = "fix-rss-downloader-rule-import-export";
+    copyToRoot = [ qbittorrent runtime pkgs.cacert ];
+    config = {
+      User = "1000:1000";
+      Cmd = [ "${qbittorrent}/bin/qbittorrent-nox" ];
+      Env = [
+        "HOME=/config"
+        "XDG_CONFIG_HOME=/config"
+        "PATH=/bin:/usr/bin:/sbin:/usr/sbin"
+      ];
+      ExposedPorts = {
+        "8080/tcp" = {};
+        "6881/tcp" = {};
+        "6881/udp" = {};
+      };
+      Volumes = {
+        "/config" = {};
+        "/downloads" = {};
+      };
     };
   };
-}
+in
+pkgs.runCommand "qbittorrent-oci-image" {
+  nativeBuildInputs = [ pkgs.skopeo ];
+} ''
+  mkdir -p "$out"
+  export TMPDIR="$out/tmp"
+  mkdir -p "$TMPDIR"
+  skopeo --tmpdir "$TMPDIR" --insecure-policy copy --format oci --dest-compress-format zstd \
+    docker-archive:${dockerImage} oci:$out:fix-rss-downloader-rule-import-export
+''
