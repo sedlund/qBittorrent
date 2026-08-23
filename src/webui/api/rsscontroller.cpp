@@ -142,7 +142,8 @@ void RSSController::markAsReadAction()
     const QString articleId {params()[u"articleId"_s]};
 
     RSS::Item *item = RSS::Session::instance()->itemByPath(itemPath);
-    if (!item) return;
+    if (!item)
+        return;
 
     if (!articleId.isNull())
     {
@@ -193,8 +194,8 @@ void RSSController::exportRulesAction()
     const RSS::AutoDownloader::RulesFileFormat format
     {
         (formatParam == u"legacy"_s)
-            ? RSS::AutoDownloader::RulesFileFormat::Legacy
-            : RSS::AutoDownloader::RulesFileFormat::JSON
+        ? RSS::AutoDownloader::RulesFileFormat::Legacy
+        : RSS::AutoDownloader::RulesFileFormat::JSON
     };
 
     const QString extension
@@ -204,8 +205,8 @@ void RSSController::exportRulesAction()
     const QString mimeType
     {
         (format == RSS::AutoDownloader::RulesFileFormat::Legacy)
-            ? u"application/octet-stream"_s
-            : u"application/json"_s
+        ? u"application/octet-stream"_s
+        : u"application/json"_s
     };
     setResult(RSS::AutoDownloader::instance()->exportRules(format), mimeType
         , u"rss-downloader-rules.%1"_s.arg(extension));
@@ -292,7 +293,8 @@ void RSSController::matchingArticlesAction()
     for (const QString &feedURL : rule.feedURLs())
     {
         const RSS::Feed *feed = RSS::Session::instance()->feedByURL(feedURL);
-        if (!feed) continue; // feed doesn't exist
+        if (!feed)
+            continue;        // feed doesn't exist
 
         QJsonArray matchingArticles;
         for (const RSS::Article *article : feed->articles())
