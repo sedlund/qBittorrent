@@ -12,6 +12,9 @@ let
     paths = with pkgs; [
       glibc
       stdenv.cc.cc.lib
+      bashInteractive
+      coreutils
+      curl
       zlib
       openssl
       libtorrent-rasterbar
@@ -39,7 +42,11 @@ pkgs.dockerTools.buildImage {
   config = {
     User = "1000:1000";
     Cmd = [ "${qbittorrent}/bin/qbittorrent-nox" ];
-    Env = [ "HOME=/config" "XDG_CONFIG_HOME=/config" ];
+    Env = [
+      "HOME=/config"
+      "XDG_CONFIG_HOME=/config"
+      "PATH=/bin:/usr/bin:/sbin:/usr/sbin"
+    ];
     ExposedPorts = {
       "8080/tcp" = {};
       "6881/tcp" = {};
