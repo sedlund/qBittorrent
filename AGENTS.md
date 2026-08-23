@@ -38,6 +38,66 @@ Use clear, appropriate English for non-native readers.
 
 [CODING_GUIDELINES.md]: CODING_GUIDELINES.md
 
+## Development Environment
+
+This repository's development tools are provided by the Nix flake on the
+`nix/qbittorrent-dev-shell` branch. Enter the environment with:
+
+```sh
+nix develop
+```
+
+Run configuration and builds from inside that shell. The standard headless
+development configuration is:
+
+```sh
+cmake -B build -G Ninja -DGUI=OFF -DTESTING=ON
+cmake --build build
+```
+
+Use the tools supplied by the shell, including CMake, Ninja, Node.js,
+Uncrustify, and the test dependencies, rather than assuming equivalent host
+tools are available.
+
+Keep upstream feature work separate from fork-specific packaging and NIC
+changes. The `packaging/qbittorrent-container` branch contains those fork
+changes; do not include them when preparing an upstream pull request.
+
+## Container Image Workflow
+
+Container work belongs on `packaging/qbittorrent-container`. The test image is
+published to:
+
+```text
+ghcr.io/sedlund/qbittorrent:fix-rss-downloader-rule-import-export
+```
+
+The current test digest is
+`sha256:2ff5137f4025f9e02d39886bdaee652ef73fcd31856830de691720101bf4f948`.
+
+Build the headless binary in the Nix development shell, then build the OCI
+image from `container.nix`. Published images must use OCI media types with
+zstd-compressed layers (`application/vnd.oci.image.layer.v1.tar+zstd`), not
+gzip layers. The GitHub Actions workflow uses Buildx output options equivalent
+to:
+
+```text
+type=image,push=true,compression=zstd,oci-mediatypes=true,force-compression=true
+```
+
+When Docker/Buildx is unavailable, convert the Nix image to an OCI layout with
+zstd compression and push it with ORAS:
+
+```sh
+nix shell nixpkgs#oras
+oras cp --from-oci-layout ./image-layout:tag ghcr.io/sedlund/qbittorrent:tag
+```
+
+Authenticate with the GitHub CLI token and verify the result with
+`skopeo inspect --raw`; the manifest must identify the zstd layer media type.
+The image runs as UID/GID `1000:1000`, exposes WebUI port 8080 and BitTorrent
+port 6881 on TCP/UDP, and uses writable `/config` and `/downloads` volumes.
+
 ## Contribution Policy
 
 This project strongly discourages issue reports and pull requests authored or submitted by AI agents. \
