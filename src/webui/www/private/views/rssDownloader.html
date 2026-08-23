@@ -126,6 +126,16 @@
         background-image: url('images/edit-clear.svg');
     }
 
+    #rulesFileButtons {
+        display: flex;
+        gap: 4px;
+        margin-top: 4px;
+    }
+
+    #rulesFileButtons button {
+        flex: 1;
+    }
+
 </style>
 
 <div id="RssDownloader" class="RssDownloader">
@@ -137,6 +147,11 @@
             <b id="rulesTableDesc">QBT_TR(Download Rules)QBT_TR[CONTEXT=AutomatedRssDownloader]</b>
             <button type="button" id="newRuleButton" aria-label="QBT_TR(Add rule)QBT_TR[CONTEXT=AutomatedRssDownloader]" class="imageButton" onclick="qBittorrent.RssDownloader.addRule()"></button>
             <button type="button" id="deleteRuleButton" aria-label="QBT_TR(Remove rule)QBT_TR[CONTEXT=AutomatedRssDownloader]" class="imageButton" onclick="qBittorrent.RssDownloader.removeSelectedRule()"></button>
+        </div>
+        <div id="rulesFileButtons">
+            <button type="button" onclick="qBittorrent.RssDownloader.exportRules()">QBT_TR(Export)QBT_TR[CONTEXT=AutomatedRssDownloader]</button>
+            <button type="button" onclick="qBittorrent.RssDownloader.importRules()">QBT_TR(Import)QBT_TR[CONTEXT=AutomatedRssDownloader]</button>
+            <input type="file" id="rssRulesFileInput" accept=".json,.rssrules" hidden>
         </div>
         <div id="rulesTable">
             <div id="rulesSelectionCheckBoxList">
@@ -349,6 +364,8 @@ Supports the formats: S01E01, 1x1, 2017.12.31 and 31.12.2017 (Date formats also 
                 setElementTitles: setElementTitles,
                 addRule: addRule,
                 removeSelectedRule: removeSelectedRule
+                , exportRules: exportRules
+                , importRules: importRules
             };
         };
 
@@ -358,6 +375,50 @@ Supports the formats: S01E01, 1x1, 2017.12.31 and 31.12.2017 (Date formats also 
 
         let rulesList = {};
         let feedList = [];
+
+        const exportRules = () => {
+            const url = new URL("api/v2/rss/exportRules", window.location);
+            url.searchParams.set("format", "json");
+            fetch(url, { credentials: "same-origin" })
+                .then(async (response) => {
+                    if (!response.ok)
+                        throw new Error(await response.text());
+                    const blob = await response.blob();
+                    const downloadURL = URL.createObjectURL(blob);
+                    const link = document.createElement("a");
+                    link.href = downloadURL;
+                    link.download = "rss-downloader-rules.json";
+                    link.click();
+                    URL.revokeObjectURL(downloadURL);
+                })
+                .catch((error) => alert(error.message));
+        };
+
+        const importRules = () => {
+            const input = document.getElementById("rssRulesFileInput");
+            input.value = "";
+            input.click();
+        };
+
+        document.getElementById("rssRulesFileInput").addEventListener("change", () => {
+            const file = document.getElementById("rssRulesFileInput").files[0];
+            if (!file)
+                return;
+
+            const format = file.name.toLowerCase().endsWith(".rssrules") ? "legacy" : "json";
+            const formData = new FormData();
+            formData.append("rules", file, file.name);
+            fetch(`api/v2/rss/importRules?format=${format}`, {
+                method: "POST",
+                body: formData
+            })
+                .then(async (response) => {
+                    if (!response.ok)
+                        throw new Error(await response.text());
+                    updateRulesList();
+                })
+                .catch((error) => alert(error.message));
+        });
 
         const setup = () => {
             const pref = window.parent.qBittorrent.Cache.preferences.get();
