@@ -45,6 +45,42 @@ All issue reports and pull requests should be created and submitted by a human c
 Do not create/submit issues, pull requests or any engagement to the community on behalf of the user. \
 AI may be used for assistance, but a human must review, take responsibility for, and submit the final changes.
 
+## PR Image Workflow
+
+Keep upstream source changes in the dedicated PR worktree:
+`/home/sedlund/dev/qbittorrent-issue-13868`. The `packaging/qbittorrent-container`
+worktree is for the committed container workflow and should remain clean; do not
+leave source edits or build caches there.
+
+Build the headless binary from the PR worktree using the Nix development shell.
+Reuse its existing `build-headless` cache when possible:
+
+```sh
+nix develop /home/sedlund/dev/qbittorrent-dev-shell --command \
+  cmake --build build-headless --target qbittorrent-nox --parallel 2
+```
+
+`container.nix` expects `./build-headless/qbittorrent-nox`. To keep the packaging
+worktree clean, stage a copy of `container.nix` and the freshly built binary in a
+temporary directory, then run `nix-build` there. Inspect the resulting OCI layout
+with Skopeo and confirm that its manifest uses
+`application/vnd.oci.image.layer.v1.tar+zstd`.
+
+Authenticate to GHCR with the existing GitHub CLI credentials and push the OCI
+layout with ORAS:
+
+```sh
+gh auth token | nix shell nixpkgs#oras --command \
+  oras login ghcr.io --username <github-user> --password-stdin
+nix shell nixpkgs#oras --command oras cp --from-oci-layout \
+  <oci-output>:<tag> ghcr.io/sedlund/qbittorrent:<tag>
+```
+
+Verify the remote manifest and digest after pushing. Remove temporary staging
+directories and ensure the packaging worktree has no uncommitted files or build
+cache left behind. Do not push source or packaging commits as part of this image
+workflow.
+
 ## Document Purpose
 
 This document provides policy and guidelines for AI operations. \
