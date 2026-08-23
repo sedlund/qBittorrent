@@ -24,12 +24,14 @@
             qt6.qttools
             qt6.qttranslations
             python3
+            nodejs
+            uncrustify
             gdb
             lldb
           ];
 
           shellHook = ''
-            export CMAKE_BUILD_PARALLEL_LEVEL="''${CMAKE_BUILD_PARALLEL_LEVEL:-$(( $(nproc) + 1 ))}"
+            export CMAKE_BUILD_PARALLEL_LEVEL="''${CMAKE_BUILD_PARALLEL_LEVEL:-2}"
             echo "qBittorrent shell ready. Configure with: cmake -B build -G Ninja -DGUI=OFF -DTESTING=ON"
           '';
         };
