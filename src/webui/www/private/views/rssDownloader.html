@@ -408,7 +408,8 @@ Supports the formats: S01E01, 1x1, 2017.12.31 and 31.12.2017 (Date formats also 
             const format = file.name.toLowerCase().endsWith(".rssrules") ? "legacy" : "json";
             const formData = new FormData();
             formData.append("rules", file, file.name);
-            fetch(`api/v2/rss/importRules?format=${format}`, {
+            formData.append("format", format);
+            fetch("api/v2/rss/importRules", {
                     method: "POST",
                     body: formData
                 })
