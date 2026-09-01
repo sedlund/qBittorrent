@@ -2192,9 +2192,10 @@ void TorrentImpl::handleTorrentChecked()
 void TorrentImpl::handleTorrentFinished()
 {
     m_hasMissingFiles = false;
-    if (m_hasFinishedStatus)
+    if (m_hasFinishedStatus || m_finishedHandlingScheduled)
         return;
 
+    m_finishedHandlingScheduled = true;
     m_statusUpdatedTriggers.enqueue([this]()
     {
         adjustStorageLocation();
@@ -2205,11 +2206,13 @@ void TorrentImpl::handleTorrentFinished()
         const bool recheckTorrentsOnCompletion = Preferences::instance()->recheckTorrentsOnCompletion();
         if (recheckTorrentsOnCompletion && m_unchecked)
         {
+            m_finishedHandlingScheduled = false;
             forceRecheck();
         }
         else
         {
             m_hasFinishedStatus = true;
+            m_finishedHandlingScheduled = false;
 
             if (isMoveInProgress() || !m_renamingFiles.isEmpty())
                 m_moveFinishedTriggers.enqueue([this] { m_session->handleTorrentFinished(this); });
@@ -2685,7 +2688,11 @@ void TorrentImpl::updateStatus(const lt::torrent_status &nativeStatus)
         return;
 
     const lt::torrent_status oldStatus = std::exchange(m_nativeStatus, nativeStatus);
-
+    const bool wasCheckingOrDownloading = (oldStatus.state == lt::torrent_status::checking_resume_data)
+        || (oldStatus.state == lt::torrent_status::checking_files)
+        || (oldStatus.state == lt::torrent_status::downloading);
+    const bool hasFinishedState = (m_nativeStatus.state == lt::torrent_status::finished)
+        || (m_nativeStatus.state == lt::torrent_status::seeding);
     if (m_nativeStatus.num_pieces != oldStatus.num_pieces)
         updateProgress();
 
@@ -2709,6 +2716,11 @@ void TorrentImpl::updateStatus(const lt::torrent_status &nativeStatus)
         else if (isDownloading())
             m_unchecked = true;
     }
+
+    // A torrent with ignored files can transition to a finished state without
+    // libtorrent emitting a `torrent_finished_alert`.
+    if (wasCheckingOrDownloading && hasFinishedState)
+        handleTorrentFinished();
 
     while (!m_statusUpdatedTriggers.isEmpty())
         std::invoke(m_statusUpdatedTriggers.dequeue());

@@ -384,6 +384,7 @@ namespace BitTorrent
         SSLParameters m_sslParams;
 
         bool m_unchecked = false;
+        bool m_finishedHandlingScheduled = false;
 
         mutable lt::add_torrent_params m_ltAddTorrentParams;
 
