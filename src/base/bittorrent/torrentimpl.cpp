@@ -90,6 +90,27 @@ using namespace BitTorrent;
 
 namespace
 {
+    const char *torrentStateName(const lt::torrent_status::state_t state)
+    {
+        switch (state)
+        {
+        case lt::torrent_status::checking_files:
+            return "checking_files";
+        case lt::torrent_status::downloading_metadata:
+            return "downloading_metadata";
+        case lt::torrent_status::downloading:
+            return "downloading";
+        case lt::torrent_status::finished:
+            return "finished";
+        case lt::torrent_status::seeding:
+            return "seeding";
+        case lt::torrent_status::checking_resume_data:
+            return "checking_resume_data";
+        default:
+            return "unknown";
+        }
+    }
+
     lt::announce_entry makeNativeAnnounceEntry(const QString &url, const int tier)
     {
         lt::announce_entry entry {url.toStdString()};
@@ -2192,6 +2213,9 @@ void TorrentImpl::handleTorrentChecked()
 void TorrentImpl::handleTorrentFinished()
 {
     m_hasMissingFiles = false;
+    qInfo().noquote() << "Torrent completion handling requested:" << name()
+                      << "hasFinishedStatus=" << m_hasFinishedStatus
+                      << "finishedHandlingScheduled=" << m_finishedHandlingScheduled;
     if (m_hasFinishedStatus || m_finishedHandlingScheduled)
         return;
 
@@ -2693,6 +2717,23 @@ void TorrentImpl::updateStatus(const lt::torrent_status &nativeStatus)
         || (oldStatus.state == lt::torrent_status::downloading);
     const bool hasFinishedState = (m_nativeStatus.state == lt::torrent_status::finished)
         || (m_nativeStatus.state == lt::torrent_status::seeding);
+    if ((oldStatus.state != m_nativeStatus.state)
+        && ((oldStatus.state == lt::torrent_status::checking_resume_data)
+            || (oldStatus.state == lt::torrent_status::checking_files)
+            || (oldStatus.state == lt::torrent_status::downloading)
+            || (m_nativeStatus.state == lt::torrent_status::finished)
+            || (m_nativeStatus.state == lt::torrent_status::seeding)))
+    {
+        qInfo().noquote() << "Torrent state transition:" << name()
+                          << "oldState=" << torrentStateName(oldStatus.state)
+                          << "newState=" << torrentStateName(m_nativeStatus.state)
+                          << "progress=" << m_nativeStatus.progress
+                          << "totalWanted=" << m_nativeStatus.total_wanted
+                          << "totalWantedDone=" << m_nativeStatus.total_wanted_done
+                          << "numPieces=" << m_nativeStatus.num_pieces
+                          << "unchecked=" << m_unchecked
+                          << "hasFinishedStatus=" << m_hasFinishedStatus;
+    }
     if (m_nativeStatus.num_pieces != oldStatus.num_pieces)
         updateProgress();
 
@@ -2717,8 +2758,8 @@ void TorrentImpl::updateStatus(const lt::torrent_status &nativeStatus)
             m_unchecked = true;
     }
 
-    // A torrent with ignored files can transition to a finished state without
-    // libtorrent emitting a `torrent_finished_alert`.
+    // Handle completion if qBittorrent observes a finished state before its
+    // normal completion path has been scheduled.
     if (wasCheckingOrDownloading && hasFinishedState)
         handleTorrentFinished();
 

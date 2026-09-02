@@ -6791,7 +6791,14 @@ void SessionImpl::handleTorrentCheckedAlert(const lt::torrent_checked_alert *ale
 void SessionImpl::handleTorrentFinishedAlert([[maybe_unused]] const lt::torrent_finished_alert *alert)
 {
     if (TorrentImpl *torrent = getTorrent(alert->handle)) [[likely]]
+    {
+        qInfo().noquote() << "Received libtorrent torrent_finished_alert:" << torrent->name();
         torrent->handleTorrentFinished();
+    }
+    else
+    {
+        qInfo() << "Received libtorrent torrent_finished_alert for an unknown torrent handle";
+    }
 }
 
 #if LIBTORRENT_VERSION_NUM >= 20101
