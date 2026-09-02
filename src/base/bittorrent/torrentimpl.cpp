@@ -2712,11 +2712,6 @@ void TorrentImpl::updateStatus(const lt::torrent_status &nativeStatus)
         return;
 
     const lt::torrent_status oldStatus = std::exchange(m_nativeStatus, nativeStatus);
-    const bool wasCheckingOrDownloading = (oldStatus.state == lt::torrent_status::checking_resume_data)
-        || (oldStatus.state == lt::torrent_status::checking_files)
-        || (oldStatus.state == lt::torrent_status::downloading);
-    const bool hasFinishedState = (m_nativeStatus.state == lt::torrent_status::finished)
-        || (m_nativeStatus.state == lt::torrent_status::seeding);
     if ((oldStatus.state != m_nativeStatus.state)
         && ((oldStatus.state == lt::torrent_status::checking_resume_data)
             || (oldStatus.state == lt::torrent_status::checking_files)
@@ -2757,11 +2752,6 @@ void TorrentImpl::updateStatus(const lt::torrent_status &nativeStatus)
         else if (isDownloading())
             m_unchecked = true;
     }
-
-    // Handle completion if qBittorrent observes a finished state before its
-    // normal completion path has been scheduled.
-    if (wasCheckingOrDownloading && hasFinishedState)
-        handleTorrentFinished();
 
     while (!m_statusUpdatedTriggers.isEmpty())
         std::invoke(m_statusUpdatedTriggers.dequeue());
