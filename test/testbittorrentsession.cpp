@@ -24,20 +24,30 @@
  * exception statement from your version.
  */
 
+#include <array>
+#include <filesystem>
+#include <fstream>
 #include <iterator>
 #include <vector>
 
 #include <libtorrent/create_torrent.hpp>
 #include <libtorrent/file_storage.hpp>
 #include <libtorrent/hasher.hpp>
+#include <libtorrent/session.hpp>
+#include <libtorrent/settings_pack.hpp>
+#include <libtorrent/torrent_flags.hpp>
 
 #include <QObject>
+#include <QDir>
+#include <QFileInfo>
 #include <QSignalSpy>
+#include <QScopeGuard>
 #include <QTemporaryDir>
 #include <QTest>
 
 #include "base/bittorrent/addtorrentparams.h"
 #include "base/bittorrent/downloadpriority.h"
+#include "base/bittorrent/peeraddress.h"
 #include "base/bittorrent/session.h"
 #include "base/bittorrent/torrentdescriptor.h"
 #include "base/bittorrent/torrentimpl.h"
@@ -58,12 +68,18 @@ namespace
         BitTorrent::TorrentDescriptor descriptor;
     };
 
-    TestTorrent createTestTorrent(const int id)
+    struct SharedPieceTorrent
+    {
+        BitTorrent::TorrentDescriptor descriptor;
+        std::vector<std::pair<std::string, std::string>> files;
+    };
+
+    TestTorrent createTestTorrent(const int id, const bool useScreenshotsDirectory = false)
     {
         lt::file_storage files;
         const std::string root = "test-" + std::to_string(id) + "/";
         files.add_file(root + "wanted.bin", PIECE_SIZE);
-        files.add_file(root + "screen.png", PIECE_SIZE);
+        files.add_file(root + (useScreenshotsDirectory ? "screenshots/screen.png" : "screen.png"), PIECE_SIZE);
 
         lt::create_torrent torrent {files, PIECE_SIZE};
         for (int index = 0; index < 2; ++index)
@@ -80,6 +96,48 @@ namespace
             qFatal("Failed to load test torrent: %s", qPrintable(descriptor.error()));
 
         return {.descriptor = descriptor.value()};
+    }
+
+    SharedPieceTorrent createSharedPieceTorrent(const int id)
+    {
+        lt::file_storage files;
+        const std::string root = "shared-" + std::to_string(id) + "/";
+        files.add_file(root + "wanted.bin", PIECE_SIZE / 2);
+        files.add_file(root + "screenshots/one.png", PIECE_SIZE / 2);
+        files.add_file(root + "screenshots/two.png", PIECE_SIZE);
+
+        lt::create_torrent torrent {files, PIECE_SIZE, lt::create_torrent::v1_only};
+        std::vector<std::pair<std::string, std::string>> content {
+            {root + "wanted.bin", std::string(PIECE_SIZE / 2, 'a')},
+            {root + "screenshots/one.png", std::string(PIECE_SIZE / 2, 'b')},
+            {root + "screenshots/two.png", std::string(PIECE_SIZE, 'c')}
+        };
+        const std::array<std::string, 2> pieces {content[0].second + content[1].second, content[2].second};
+        for (int index = 0; index < 2; ++index)
+        {
+            const std::string &piece = pieces[index];
+            lt::hasher hasher;
+            hasher.update(piece.data(), static_cast<int>(piece.size()));
+            torrent.set_hash(lt::piece_index_t {index}, hasher.final());
+        }
+
+        const std::vector<char> data = torrent.generate_buf();
+        const auto descriptor = BitTorrent::TorrentDescriptor::load(QByteArray(data.data(), data.size()));
+        if (!descriptor)
+            qFatal("Failed to load shared-piece test torrent: %s", qPrintable(descriptor.error()));
+
+        return {.descriptor = descriptor.value(), .files = std::move(content)};
+    }
+
+    lt::settings_pack createSeederSettings()
+    {
+        lt::settings_pack settings;
+        settings.set_str(lt::settings_pack::listen_interfaces, "127.0.0.1:0");
+        settings.set_bool(lt::settings_pack::enable_dht, false);
+        settings.set_bool(lt::settings_pack::enable_lsd, false);
+        settings.set_bool(lt::settings_pack::enable_upnp, false);
+        settings.set_bool(lt::settings_pack::enable_natpmp, false);
+        return settings;
     }
 }
 
@@ -129,6 +187,137 @@ private slots:
     void testFinishedWithIgnoredFile()
     {
         testFinishedStateUpdate({BitTorrent::DownloadPriority::Normal, BitTorrent::DownloadPriority::Ignored}, false);
+    }
+
+    void testFilenameFilterAppliedWhenAddingTorrent()
+    {
+        QTemporaryDir contentDir;
+        QVERIFY(contentDir.isValid());
+
+        const bool oldExcludedFileNamesEnabled = m_session->isExcludedFileNamesEnabled();
+        const QStringList oldExcludedFileNames = m_session->excludedFileNames();
+        [[maybe_unused]] const auto settingsGuard = qScopeGuard([this, oldExcludedFileNamesEnabled, oldExcludedFileNames]
+        {
+            m_session->setExcludedFileNamesEnabled(oldExcludedFileNamesEnabled);
+            m_session->setExcludedFileNames(oldExcludedFileNames);
+        });
+        m_session->setExcludedFileNamesEnabled(true);
+        m_session->setExcludedFileNames({QStringLiteral("screenshots")});
+
+        const TestTorrent testTorrent = createTestTorrent(++m_torrentID, true);
+        BitTorrent::AddTorrentParams params;
+        params.savePath = Path(contentDir.path());
+        params.useDownloadPath = false;
+        params.useAutoTMM = false;
+
+        BitTorrent::TorrentImpl *torrent = nullptr;
+        const auto torrentAddedConnection = connect(m_session, &BitTorrent::Session::torrentAdded, this
+            , [&torrent](BitTorrent::Torrent *const addedTorrent)
+        {
+            torrent = dynamic_cast<BitTorrent::TorrentImpl *>(addedTorrent);
+        });
+
+        QVERIFY(m_session->addTorrent(testTorrent.descriptor, params));
+        QTRY_VERIFY_WITH_TIMEOUT(torrent, 10000);
+        QTRY_VERIFY_WITH_TIMEOUT(torrent->isDownloading(), 10000);
+        const PathList filePaths = torrent->filePaths();
+        const QList<BitTorrent::DownloadPriority> filePriorities = torrent->filePriorities();
+        disconnect(torrentAddedConnection);
+
+        QVERIFY(m_session->removeTorrent(torrent->id(), BitTorrent::TorrentRemoveOption::KeepContent));
+        QTRY_VERIFY_WITH_TIMEOUT(m_session->torrentsCount() == 0, 10000);
+
+        QCOMPARE(filePaths.size(), 2);
+        QCOMPARE(filePriorities.size(), filePaths.size());
+        const int wantedIndex = filePaths.indexOf(Path(QStringLiteral("test-%1/wanted.bin").arg(m_torrentID)));
+        const int screenshotsIndex = filePaths.indexOf(Path(QStringLiteral("test-%1/screenshots/screen.png").arg(m_torrentID)));
+        QVERIFY(wantedIndex >= 0);
+        QVERIFY(screenshotsIndex >= 0);
+        QCOMPARE(filePriorities.at(wantedIndex), BitTorrent::DownloadPriority::Normal);
+        QCOMPARE(filePriorities.at(screenshotsIndex), BitTorrent::DownloadPriority::Ignored);
+    }
+
+    void testSharedPieceWithExcludedFile()
+    {
+        QTemporaryDir contentDir;
+        QVERIFY(contentDir.isValid());
+
+        const bool oldExcludedFileNamesEnabled = m_session->isExcludedFileNamesEnabled();
+        const QStringList oldExcludedFileNames = m_session->excludedFileNames();
+        [[maybe_unused]] const auto settingsGuard = qScopeGuard([this, oldExcludedFileNamesEnabled, oldExcludedFileNames]
+        {
+            m_session->setExcludedFileNamesEnabled(oldExcludedFileNamesEnabled);
+            m_session->setExcludedFileNames(oldExcludedFileNames);
+        });
+        m_session->setExcludedFileNamesEnabled(true);
+        m_session->setExcludedFileNames({QStringLiteral("screenshots")});
+
+        const SharedPieceTorrent testTorrent = createSharedPieceTorrent(++m_torrentID);
+        const std::filesystem::path rootPath = contentDir.path().toStdString();
+        const std::filesystem::path seedPath = rootPath / "seed";
+        const std::filesystem::path downloadPath = rootPath / "download";
+        for (const auto &[relativePath, data] : testTorrent.files)
+        {
+            const std::filesystem::path filePath = seedPath / relativePath;
+            std::filesystem::create_directories(filePath.parent_path());
+            std::ofstream file(filePath, std::ios::binary);
+            QVERIFY(file);
+            file.write(data.data(), static_cast<std::streamsize>(data.size()));
+            QVERIFY(file);
+        }
+
+        lt::session seedSession {createSeederSettings()};
+        lt::add_torrent_params seedParams = testTorrent.descriptor.ltAddTorrentParams();
+        seedParams.save_path = seedPath.string();
+        seedParams.flags |= lt::torrent_flags::seed_mode;
+        seedParams.flags &= ~lt::torrent_flags::paused;
+        try
+        {
+            seedSession.add_torrent(std::move(seedParams));
+        }
+        catch (const std::exception &error)
+        {
+            QFAIL(qPrintable(QStringLiteral("Failed to add seeder: %1").arg(QString::fromUtf8(error.what()))));
+        }
+        QTRY_VERIFY_WITH_TIMEOUT(seedSession.listen_port() != 0, 5000);
+
+        BitTorrent::AddTorrentParams params;
+        params.savePath = Path(QString::fromStdString(downloadPath.string()));
+        params.useDownloadPath = false;
+        params.useAutoTMM = false;
+        params.addForced = true;
+
+        BitTorrent::TorrentImpl *torrent = nullptr;
+        int finishedCount = 0;
+        const auto torrentFinishedConnection = connect(m_session, &BitTorrent::Session::torrentFinished, this
+            , [&torrent, &finishedCount](BitTorrent::Torrent *const finishedTorrent)
+        {
+            if (finishedTorrent == torrent)
+                ++finishedCount;
+        });
+        const auto torrentAddedConnection = connect(m_session, &BitTorrent::Session::torrentAdded, this
+            , [&torrent](BitTorrent::Torrent *const addedTorrent)
+        {
+            torrent = dynamic_cast<BitTorrent::TorrentImpl *>(addedTorrent);
+        });
+
+        QVERIFY(m_session->addTorrent(testTorrent.descriptor, params));
+        QTRY_VERIFY_WITH_TIMEOUT(torrent, 10000);
+        QVERIFY(torrent->connectPeer({QHostAddress::LocalHost, seedSession.listen_port()}));
+        QTRY_COMPARE_WITH_TIMEOUT(finishedCount, 1, 10000);
+        disconnect(torrentAddedConnection);
+        disconnect(torrentFinishedConnection);
+
+        const QDir downloadDir(QString::fromStdString(downloadPath.string()));
+        const QString torrentRoot = QStringLiteral("shared-%1").arg(m_torrentID);
+        QVERIFY(QFileInfo::exists(downloadDir.filePath(torrentRoot + QStringLiteral("/wanted.bin"))));
+        QVERIFY(!QFileInfo::exists(downloadDir.filePath(torrentRoot + QStringLiteral("/screenshots/one.png"))));
+        QVERIFY(!QFileInfo::exists(downloadDir.filePath(torrentRoot + QStringLiteral("/screenshots/two.png"))));
+        QVERIFY(!downloadDir.entryList({QStringLiteral("*.parts")}
+                    , QDir::Files | QDir::Hidden).isEmpty());
+
+        QVERIFY(m_session->removeTorrent(torrent->id(), BitTorrent::TorrentRemoveOption::KeepContent));
+        QTRY_VERIFY_WITH_TIMEOUT(m_session->torrentsCount() == 0, 10000);
     }
 
     void testFinishedAlertBeforeStateUpdate()
