@@ -131,6 +131,18 @@ private slots:
         testFinishedStateUpdate({BitTorrent::DownloadPriority::Normal, BitTorrent::DownloadPriority::Ignored}, false);
     }
 
+    void testFinishedWithIgnoredFileInUnwantedFolder()
+    {
+        const bool oldUnwantedFolderEnabled = m_session->isUnwantedFolderEnabled();
+        [[maybe_unused]] const auto settingsGuard = qScopeGuard([this, oldUnwantedFolderEnabled]
+        {
+            m_session->setUnwantedFolderEnabled(oldUnwantedFolderEnabled);
+        });
+        m_session->setUnwantedFolderEnabled(true);
+
+        testFinishedStateUpdate({BitTorrent::DownloadPriority::Normal, BitTorrent::DownloadPriority::Ignored}, true);
+    }
+
     void testFinishedAlertBeforeStateUpdate()
     {
         testFinishedStateUpdate({BitTorrent::DownloadPriority::Normal, BitTorrent::DownloadPriority::Normal}, true);
