@@ -31,11 +31,13 @@
 #include <vector>
 
 #include <libtorrent/create_torrent.hpp>
+#include <libtorrent/bencode.hpp>
 #include <libtorrent/file_storage.hpp>
 #include <libtorrent/hasher.hpp>
 #include <libtorrent/session.hpp>
 #include <libtorrent/settings_pack.hpp>
 #include <libtorrent/torrent_flags.hpp>
+#include <libtorrent/version.hpp>
 
 #include <QObject>
 #include <QDir>
@@ -90,7 +92,8 @@ namespace
             torrent.set_hash(lt::piece_index_t {index}, hasher.final());
         }
 
-        const std::vector<char> data = torrent.generate_buf();
+        std::vector<char> data;
+        lt::bencode(std::back_inserter(data), torrent.generate());
         const auto descriptor = BitTorrent::TorrentDescriptor::load(QByteArray(data.data(), data.size()));
         if (!descriptor)
             qFatal("Failed to load test torrent: %s", qPrintable(descriptor.error()));
@@ -106,7 +109,11 @@ namespace
         files.add_file(root + "screenshots/one.png", PIECE_SIZE / 2);
         files.add_file(root + "screenshots/two.png", PIECE_SIZE);
 
+#if LIBTORRENT_VERSION_NUM >= 20000
         lt::create_torrent torrent {files, PIECE_SIZE, lt::create_torrent::v1_only};
+#else
+        lt::create_torrent torrent {files, PIECE_SIZE};
+#endif
         std::vector<std::pair<std::string, std::string>> content {
             {root + "wanted.bin", std::string(PIECE_SIZE / 2, 'a')},
             {root + "screenshots/one.png", std::string(PIECE_SIZE / 2, 'b')},
@@ -121,7 +128,8 @@ namespace
             torrent.set_hash(lt::piece_index_t {index}, hasher.final());
         }
 
-        const std::vector<char> data = torrent.generate_buf();
+        std::vector<char> data;
+        lt::bencode(std::back_inserter(data), torrent.generate());
         const auto descriptor = BitTorrent::TorrentDescriptor::load(QByteArray(data.data(), data.size()));
         if (!descriptor)
             qFatal("Failed to load shared-piece test torrent: %s", qPrintable(descriptor.error()));
