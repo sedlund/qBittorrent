@@ -2213,9 +2213,10 @@ void TorrentImpl::handleTorrentChecked()
 void TorrentImpl::handleTorrentFinished()
 {
     m_hasMissingFiles = false;
-    qInfo().noquote() << "Torrent completion handling requested:" << name()
-                      << "hasFinishedStatus=" << m_hasFinishedStatus
-                      << "finishedHandlingScheduled=" << m_finishedHandlingScheduled;
+    const QString completionMessage = u"Torrent completion handling requested: \"%1\" hasFinishedStatus=%2 finishedHandlingScheduled=%3"_s
+        .arg(name()).arg(m_hasFinishedStatus).arg(m_finishedHandlingScheduled);
+    LogMsg(completionMessage, Log::INFO);
+    qInfo().noquote() << completionMessage;
     if (m_hasFinishedStatus || m_finishedHandlingScheduled)
         return;
 
@@ -2724,15 +2725,12 @@ void TorrentImpl::updateStatus(const lt::torrent_status &nativeStatus)
             || (m_nativeStatus.state == lt::torrent_status::finished)
             || (m_nativeStatus.state == lt::torrent_status::seeding)))
     {
-        qInfo().noquote() << "Torrent state transition:" << name()
-                          << "oldState=" << torrentStateName(oldStatus.state)
-                          << "newState=" << torrentStateName(m_nativeStatus.state)
-                          << "progress=" << m_nativeStatus.progress
-                          << "totalWanted=" << m_nativeStatus.total_wanted
-                          << "totalWantedDone=" << m_nativeStatus.total_wanted_done
-                          << "numPieces=" << m_nativeStatus.num_pieces
-                          << "unchecked=" << m_unchecked
-                          << "hasFinishedStatus=" << m_hasFinishedStatus;
+        const QString stateMessage = u"Torrent state transition: \"%1\" oldState=%2 newState=%3 progress=%4 totalWanted=%5 totalWantedDone=%6 numPieces=%7 unchecked=%8 hasFinishedStatus=%9"_s
+            .arg(name()).arg(torrentStateName(oldStatus.state)).arg(torrentStateName(m_nativeStatus.state))
+            .arg(m_nativeStatus.progress).arg(m_nativeStatus.total_wanted).arg(m_nativeStatus.total_wanted_done)
+            .arg(m_nativeStatus.num_pieces).arg(m_unchecked).arg(m_hasFinishedStatus);
+        LogMsg(stateMessage, Log::INFO);
+        qInfo().noquote() << stateMessage;
     }
     if (m_nativeStatus.num_pieces != oldStatus.num_pieces)
         updateProgress();
