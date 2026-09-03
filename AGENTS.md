@@ -55,6 +55,10 @@ cmake -B build -G Ninja -DGUI=OFF -DTESTING=ON
 cmake --build build -- -j4
 ```
 
+Use the flake's locked inputs as-is. Do not pass `--override-input` to
+`nix develop`; update `flake.lock` with `nix flake update` when a dependency
+revision needs to change.
+
 Use the versions pinned by this flake's `flake.lock`. Limit concurrent build
 jobs to four or fewer (`-j4` for Ninja/CMake, or
 `CMAKE_BUILD_PARALLEL_LEVEL=4`); do not use a higher job count.
