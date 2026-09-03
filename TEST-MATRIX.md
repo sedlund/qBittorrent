@@ -52,6 +52,11 @@ normal `torrent_finished_alert` completion path.
 This establishes a reproducible regression boundary at `d63dec11b`,
 independent of the missing-alert fallback fix.
 
+The published 5.2.3 diagnostic image (`test-excluded-file-completion`, qBittorrent
+5.2.3 with libtorrent 2.0.13) also emitted the completion notification during
+the user's matching Kubernetes test. The corresponding master image reached
+the move-complete log without emitting the completion notification.
+
 The fixed 2.0.13 run is the cleanest local result. The 1.2.19 runs show
 that the shared-piece ignored-file case is not yet proven for the 1.2 line.
 The exact CI 1.2.20 build has not been run locally.
@@ -112,12 +117,7 @@ selected by its build configuration.
 
 1. Compare the current fixed-image runtime result with the no-fix image using
    the same torrent and profile.
-2. Compare the published 5.2.3 no-fix diagnostic image with the current
-   master image using the same torrent and profile. This isolates source
-   changes between the 5.2.3 release and master while keeping the 2.x
-   dependency line consistent.
-3. If the 1.2 path must be tested as an image, publish matching fixed and
+2. If the 1.2 path must be tested as an image, publish matching fixed and
    no-fix 1.2 images; do not compare a fixed 1.2 image with a no-fix 2.x image.
-4. Run the exact CI 1.2.20 build only if the 1.2.19 result remains ambiguous or
+3. Run the exact CI 1.2.20 build only if the 1.2.19 result remains ambiguous or
    exact CI parity is needed.
-
