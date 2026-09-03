@@ -28,8 +28,10 @@
 #include <vector>
 
 #include <libtorrent/create_torrent.hpp>
+#include <libtorrent/bencode.hpp>
 #include <libtorrent/file_storage.hpp>
 #include <libtorrent/hasher.hpp>
+#include <libtorrent/version.hpp>
 
 #include <QObject>
 #include <QSignalSpy>
@@ -74,7 +76,8 @@ namespace
             torrent.set_hash(lt::piece_index_t {index}, hasher.final());
         }
 
-        const std::vector<char> data = torrent.generate_buf();
+        std::vector<char> data;
+        lt::bencode(std::back_inserter(data), torrent.generate());
         const auto descriptor = BitTorrent::TorrentDescriptor::load(QByteArray(data.data(), data.size()));
         if (!descriptor)
             qFatal("Failed to load test torrent: %s", qPrintable(descriptor.error()));
