@@ -6450,7 +6450,18 @@ void SessionImpl::handleTorrentCheckedAlert(const lt::torrent_checked_alert *ale
 void SessionImpl::handleTorrentFinishedAlert([[maybe_unused]] const lt::torrent_finished_alert *alert)
 {
     if (TorrentImpl *torrent = getTorrent(alert->handle)) [[likely]]
+    {
+        const QString message = QStringLiteral("Received libtorrent torrent_finished_alert: \"%1\"").arg(torrent->name());
+        LogMsg(message, Log::INFO);
+        qInfo().noquote() << message;
         torrent->handleTorrentFinished();
+    }
+    else
+    {
+        const QString message = QStringLiteral("Received libtorrent torrent_finished_alert for an unknown torrent handle");
+        LogMsg(message, Log::INFO);
+        qInfo().noquote() << message;
+    }
 }
 
 void SessionImpl::handleSaveResumeDataAlert(lt::save_resume_data_alert *alert)

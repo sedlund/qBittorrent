@@ -89,6 +89,27 @@ using namespace BitTorrent;
 
 namespace
 {
+    const char *torrentStateName(const lt::torrent_status::state_t state)
+    {
+        switch (state)
+        {
+        case lt::torrent_status::checking_files:
+            return "checking_files";
+        case lt::torrent_status::downloading_metadata:
+            return "downloading_metadata";
+        case lt::torrent_status::downloading:
+            return "downloading";
+        case lt::torrent_status::finished:
+            return "finished";
+        case lt::torrent_status::seeding:
+            return "seeding";
+        case lt::torrent_status::checking_resume_data:
+            return "checking_resume_data";
+        default:
+            return "unknown";
+        }
+    }
+
     lt::announce_entry makeNativeAnnounceEntry(const QString &url, const int tier)
     {
         lt::announce_entry entry {url.toStdString()};
@@ -2115,6 +2136,10 @@ void TorrentImpl::handleTorrentChecked()
 void TorrentImpl::handleTorrentFinished()
 {
     m_hasMissingFiles = false;
+    const QString completionMessage = QStringLiteral("Torrent completion handling requested: \"%1\" hasFinishedStatus=%2")
+        .arg(name()).arg(m_hasFinishedStatus);
+    LogMsg(completionMessage, Log::INFO);
+    qInfo().noquote() << completionMessage;
     if (m_hasFinishedStatus)
         return;
 
@@ -2565,6 +2590,21 @@ void TorrentImpl::updateStatus(const lt::torrent_status &nativeStatus)
         return;
 
     const lt::torrent_status oldStatus = std::exchange(m_nativeStatus, nativeStatus);
+
+    if ((oldStatus.state != m_nativeStatus.state)
+        && ((oldStatus.state == lt::torrent_status::checking_resume_data)
+            || (oldStatus.state == lt::torrent_status::checking_files)
+            || (oldStatus.state == lt::torrent_status::downloading)
+            || (m_nativeStatus.state == lt::torrent_status::finished)
+            || (m_nativeStatus.state == lt::torrent_status::seeding)))
+    {
+        const QString stateMessage = QStringLiteral("Torrent state transition: \"%1\" oldState=%2 newState=%3 progress=%4 totalWanted=%5 totalWantedDone=%6 numPieces=%7 unchecked=%8 hasFinishedStatus=%9")
+            .arg(name()).arg(torrentStateName(oldStatus.state)).arg(torrentStateName(m_nativeStatus.state))
+            .arg(m_nativeStatus.progress).arg(m_nativeStatus.total_wanted).arg(m_nativeStatus.total_wanted_done)
+            .arg(m_nativeStatus.num_pieces).arg(m_unchecked).arg(m_hasFinishedStatus);
+        LogMsg(stateMessage, Log::INFO);
+        qInfo().noquote() << stateMessage;
+    }
 
     if (m_nativeStatus.num_pieces != oldStatus.num_pieces)
         updateProgress();
