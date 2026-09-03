@@ -52,8 +52,12 @@ development configuration is:
 
 ```sh
 cmake -B build -G Ninja -DGUI=OFF -DTESTING=ON
-cmake --build build
+cmake --build build -- -j4
 ```
+
+Use the versions pinned by this flake's `flake.lock`. Limit concurrent build
+jobs to four or fewer (`-j4` for Ninja/CMake, or
+`CMAKE_BUILD_PARALLEL_LEVEL=4`); do not use a higher job count.
 
 Use the tools supplied by the shell, including CMake, Ninja, Node.js,
 Uncrustify, and the test dependencies, rather than assuming equivalent host
@@ -67,6 +71,25 @@ Generated build directories are reusable local caches and may take a long time
 to recreate. Do not remove them without explicit approval. Keep them out of
 commits by staging intended files explicitly; a worktree-local
 `.git/info/exclude` entry may be used for a cache such as `build-headless/`.
+
+## Branch and Worktree Map
+
+Use persistent qBittorrent worktrees under `/home/sedlund/dev/qbittorrent/`;
+do not create source worktrees under `/tmp`.
+
+| Purpose | Branch | Worktree |
+| --- | --- | --- |
+| Current completion PR | `fix/excluded-file-finished-event` | `qbittorrent-excluded-file-fix` |
+| Master no-fix baseline | `excluded-file-completion-logs-no-fix` | `qbittorrent-completion-no-fix` |
+| 5.2.3 with libtorrent 2.x diagnostics | `experiment/5.2.3-completion-logs-no-fix-2_x` | `qbittorrent-5.2.3-completion-logs-no-fix-2_x` |
+| 5.2.3 with libtorrent 1.2 test support | `experiment/5.2.3-libtorrent-1_2` | `qbittorrent-5.2.3-libtorrent-1_2` |
+| Rename-queue regression (current master) | `experiment/rename-queue-regression-test` | `qbittorrent-rename-queue-regression` |
+| Rename-queue comparison (before `d63dec11b`) | `experiment/rename-queue-regression-pre-d63` | `qbittorrent-rename-queue-regression-pre-d63` |
+
+These branches are mirrored on the `fork` remote. Fetch before comparing
+branches, and push experiment commits to their matching fork branch. Keep the
+completion PR and the rename-queue regression separate. The regression test
+and results are documented in `TEST-MATRIX.md` on the investigation branch.
 
 ## RSS Downloader Rules
 
