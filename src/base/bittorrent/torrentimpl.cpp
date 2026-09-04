@@ -2361,6 +2361,7 @@ void TorrentImpl::handleFileRenamed(const lt::file_index_t nativeFileIndex, cons
     const int fileIndex = fileIndexFromNative(nativeFileIndex);
     Q_ASSERT(fileIndex >= 0);
 
+    const FileRenameInfo currentFileRenameInfo = m_renamingFiles.dequeue();
     const Path oldFilePath = m_filePaths.at(fileIndex);
     const Path newFilePath = makeUserPath(newActualFilePath);
 
@@ -2412,7 +2413,6 @@ void TorrentImpl::handleFileRenamed(const lt::file_index_t nativeFileIndex, cons
             oldParentPath = oldParentPath.parentPath();
         }
 
-        const FileRenameInfo currentFileRenameInfo = m_renamingFiles.dequeue();
         if (currentFileRenameInfo.folderRenameJobID >= 0)
         {
             m_renamingFolders.head().renamedFiles.insert(fileIndex, oldFilePath);
